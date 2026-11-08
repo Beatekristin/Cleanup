@@ -478,26 +478,52 @@ details.keybox[open] summary{margin-bottom:12px}
   })();
 
   // ---------- Robot on the phone: free, no key, photo never leaves the device ----------
-  const TJS = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.1/dist/transformers.web.min.js";
-  let brain = null;
+  const LIBS = [
+    "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.web.min.js",
+    "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.1/dist/transformers.web.min.js",
+    "https://unpkg.com/@huggingface/transformers@3.8.1/dist/transformers.web.min.js"
+  ];
+  let brain = null, brainErr = "";
+  async function importLib(){
+    let last;
+    for (const u of LIBS){ try { return await import(u); } catch(e){ last = e; } }
+    throw new Error("bibliotek: " + (last?.message || last));
+  }
+  async function makePipe(lib, task, model, cb){
+    const tries = [
+      { device:"wasm", dtype:"q8" },
+      { device:"wasm", dtype:"fp32" },
+      { dtype:"q8" }
+    ];
+    let last;
+    for (const t of tries){
+      try { return await lib.pipeline(task, model, { ...t, progress_callback: cb }); }
+      catch(e){ last = e; }
+    }
+    throw new Error(model + ": " + (last?.message || last));
+  }
   function loadBrain(onProgress){
     if (!brain){
       brain = (async () => {
-        const { pipeline, env } = await import(TJS);
+        const lib = await importLib();
+        const env = lib.env;
         env.allowLocalModels = false;
+        try { if (!("caches" in window)) env.useBrowserCache = false; await caches.keys(); } catch(e){ env.useBrowserCache = false; }
+        try { env.backends.onnx.wasm.numThreads = 1; env.backends.onnx.wasm.proxy = false; } catch(e){}
         const files = {};
         const cb = p => {
-          if (p.status === "progress" && p.total){ files[p.file + p.name] = [p.loaded, p.total]; }
+          if (p.status === "progress" && p.total){ files[(p.name||"") + (p.file||"")] = [p.loaded, p.total]; }
           const v = Object.values(files); if (!v.length) return;
           const l = v.reduce((s,x)=>s+x[0],0), t = v.reduce((s,x)=>s+x[1],0);
           onProgress && onProgress(Math.min(99, Math.round(l/t*100)));
         };
-        const [det, clip] = await Promise.all([
-          pipeline("object-detection", "Xenova/detr-resnet-50", { dtype:"q8", progress_callback: cb }),
-          pipeline("zero-shot-image-classification", "Xenova/clip-vit-base-patch32", { dtype:"q8", progress_callback: cb })
-        ]);
+        const errs = [];
+        let det = null, clip = null;
+        try { det = await makePipe(lib, "object-detection", "Xenova/detr-resnet-50", cb); } catch(e){ errs.push(e.message); }
+        try { clip = await makePipe(lib, "zero-shot-image-classification", "Xenova/clip-vit-base-patch32", cb); } catch(e){ errs.push(e.message); }
+        if (!det && !clip) throw new Error(errs.join(" | "));
         return { det, clip };
-      })().catch(e => { brain = null; throw e; });
+      })().catch(e => { brain = null; brainErr = String(e?.message || e).slice(0, 220); throw e; });
     }
     return brain;
   }
@@ -587,13 +613,15 @@ details.keybox[open] summary{margin-bottom:12px}
     onStage && onStage("Leder efter ting");
     const found = {};
     const add = (k, n) => { found[k] = (found[k]||0) + n; };
-    const dets = await b.det(smallUrl(img, 800), { threshold: 0.55 });
-    for (const d of dets){ const g = COCO[d.label]; if (g) add(g, 1); }
+    if (b.det){
+      const dets = await b.det(smallUrl(img, 800), { threshold: 0.55 });
+      for (const d of dets){ const g = COCO[d.label]; if (g) add(g, 1); }
+    }
     if (signal.aborted) throw {code:"cancelled"};
     onStage && onStage("Kigger i hvert hjørne");
     const labels = SCENES.map(s => s[1]);
     const parts = [smallUrl(img, 448), ...crops(img)];
-    const res = await b.clip(parts, labels);
+    const res = b.clip ? await b.clip(parts, labels) : [];
     const all = Array.isArray(res[0]) ? res : [res];
     const tiles = {};
     all.forEach((scores, idx) => {
@@ -686,7 +714,7 @@ Hvis billedet ikke viser et rum eller noget der roder, så giv "opgaver": [] og 
         no_credit: "Der er ingen kredit på din Anthropic-konto. Køb kredit på console.anthropic.com under Billing."
       };
       const m = map[e?.code] ?? "Noget gik galt med forbindelsen. Prøv igen.";
-      if (m) err(m);
+      if (m) err(e?.code === "brain_failed" && brainErr ? m + " Teknisk fejl: " + brainErr : m);
       if (!plan) say("Hej! Vis mig rodet.", "Tag et billede af det, der roder. Så laver jeg en plan med én lille opgave ad gangen.");
     } finally { ctl = null; clearInterval(wt); }
   }
