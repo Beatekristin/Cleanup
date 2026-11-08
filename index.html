@@ -61,6 +61,27 @@ button,label.btn{font:inherit;cursor:pointer}
 .brand i{width:8px;height:8px;border-radius:50%;background:var(--sponge);box-shadow:0 0 0 3px rgba(247,198,58,.3)}
 .ghost{background:none;border:0;color:inherit;opacity:.85;font-size:14px;font-weight:500;text-decoration:underline;text-underline-offset:3px;padding:6px 0}
 .sheet .ghost{color:var(--muted);opacity:1}
+.top-r{display:flex;align-items:center;gap:14px}
+.music-btn{display:inline-flex;align-items:center;gap:7px;background:var(--sponge);color:var(--sponge-ink);border:2.5px solid var(--edge);border-radius:999px;padding:7px 14px 7px 11px;font:inherit;font-weight:700;font-size:14px;box-shadow:0 3px 0 var(--edge);transition:transform .08s,box-shadow .08s}
+.music-btn:active{transform:translateY(3px);box-shadow:none}
+.music-btn svg{width:18px;height:18px}
+.music-btn.playing svg{animation:bob .6s ease-in-out infinite alternate}
+@keyframes bob{to{transform:translateY(-2px) rotate(-8deg)}}
+.mwrap{position:fixed;inset:0;z-index:30;display:flex;align-items:flex-end;justify-content:center}
+.mbg{position:absolute;inset:0;background:rgba(5,16,13,.55);animation:fadeIn .2s ease}
+.msheet{position:relative;width:100%;max-width:560px;background:var(--sheet);border-radius:28px 28px 0 0;border:3px solid var(--edge);border-bottom:0;
+  padding:14px max(18px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:14px;animation:slideUp .28s cubic-bezier(.3,1.2,.5,1)}
+.mgrab{width:44px;height:5px;border-radius:5px;background:var(--line);align-self:center}
+.msheet h2{font-size:24px}
+.mlist{display:flex;flex-direction:column;gap:10px}
+.mapp{display:grid;grid-template-columns:48px 1fr auto;gap:14px;align-items:center;padding:12px 14px;background:var(--surface);color:var(--ink);text-decoration:none;border:2.5px solid var(--edge);border-radius:18px;box-shadow:0 4px 0 var(--edge);transition:transform .08s,box-shadow .08s}
+.mapp:active{transform:translateY(4px);box-shadow:none}
+.mapp .logo{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;color:#fff;font-weight:800;font-size:20px;border:2px solid var(--edge)}
+.mapp b{display:block;font-size:17px}
+.mapp small{color:var(--muted);font-size:13px}
+.mapp .last{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:var(--mint);color:#06241C;padding:3px 8px;border-radius:999px}
+@keyframes fadeIn{from{opacity:0}}
+@keyframes slideUp{from{transform:translateY(100%)}}
 
 .speaker{display:grid;grid-template-columns:118px 1fr;gap:12px;align-items:end}
 .bot{width:118px;height:134px;overflow:visible;filter:drop-shadow(0 6px 0 rgba(0,0,0,.18))}
@@ -203,7 +224,13 @@ details.keybox[open] summary{margin-bottom:12px}
   <div class="wrap">
     <div class="top">
       <span class="brand"><i></i>Oprydningsrobotten</span>
-      <button class="ghost" id="resetBtn" hidden>Start forfra</button>
+      <div class="top-r">
+        <button class="ghost" id="resetBtn" hidden>Start forfra</button>
+        <button class="music-btn" id="musicBtn" aria-haspopup="dialog">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>
+          Musik
+        </button>
+      </div>
     </div>
     <div class="speaker">
       <svg class="bot" id="bot" viewBox="0 0 120 134" aria-hidden="true">
@@ -320,6 +347,17 @@ details.keybox[open] summary{margin-bottom:12px}
   <div id="errBox" class="err" hidden></div>
  </div>
 </main>
+
+<div class="mwrap" id="musicSheet" hidden>
+  <div class="mbg" id="musicBg"></div>
+  <div class="msheet" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <div class="mgrab"></div>
+    <h2 id="mTitle">Ryd op med musik</h2>
+    <p class="note">Vælg din musikapp. Den åbner med musik til oprydning. Kom tilbage hertil, så spiller musikken videre.</p>
+    <div class="mlist" id="musicList"></div>
+    <button class="btn btn-line" id="musicClose">Luk</button>
+  </div>
+</div>
 
 <script>
 (() => {
@@ -818,6 +856,36 @@ Hvis billedet ikke viser et rum eller noget der roder, så giv "opgaver": [] og 
     const did = plan ? plan.opgaver.filter(o=>o.status==="done").map(o=>o.titel).join("; ") : "";
     plan=null; analyze(f, did ? `Brugeren har lige klaret disse opgaver: ${did}. Tæl kun det, der stadig roder. Hvis næsten alt er fint, så ros dem i "overblik".` : "");
   };
+  // ---------- Music ----------
+  const MUSIC = [
+    { id:"ytm", name:"YouTube Music", sub:"Oprydningsmusik", color:"#E01F1F", mark:"▶\uFE0E", url:"https://music.youtube.com/search?q=" + encodeURIComponent("oprydning musik playlist") },
+    { id:"spotify", name:"Spotify", sub:"Playlister til rengøring", color:"#1AA34A", mark:"S", url:"https://open.spotify.com/search/" + encodeURIComponent("cleaning playlist") },
+    { id:"apple", name:"Apple Music", sub:"Glad musik til oprydning", color:"#F0405A", mark:"♪\uFE0E", url:"https://music.apple.com/dk/search?term=" + encodeURIComponent("cleaning") },
+    { id:"youtube", name:"YouTube", sub:"Musikvideoer og mix", color:"#C4171B", mark:"▶\uFE0E", url:"https://www.youtube.com/results?search_query=" + encodeURIComponent("cleaning music mix") }
+  ];
+  const musicPref = { get(){ try{ return localStorage.getItem("ryd-music")||""; }catch(e){ return ""; } }, set(v){ try{ localStorage.setItem("ryd-music", v); }catch(e){} } };
+  function renderMusic(){
+    const last = musicPref.get();
+    const list = [...MUSIC].sort((a,b) => (b.id===last) - (a.id===last));
+    $("musicList").innerHTML = "";
+    for (const m of list){
+      const a = document.createElement("a");
+      a.className = "mapp"; a.href = m.url; a.target = "_blank"; a.rel = "noopener";
+      a.innerHTML = `<span class="logo"></span><span><b></b><small></small></span>${m.id===last ? '<span class="last">Sidst</span>' : '<span></span>'}`;
+      a.querySelector(".logo").style.background = m.color; a.querySelector(".logo").textContent = m.mark;
+      a.querySelector("b").textContent = m.name; a.querySelector("small").textContent = m.sub;
+      a.onclick = () => { musicPref.set(m.id); $("musicBtn").classList.add("playing"); closeMusic(); say("Skru op!", "Musikken kører videre, når du kommer tilbage hertil."); bot("happy"); };
+      $("musicList").append(a);
+    }
+  }
+  function openMusic(){ renderMusic(); $("musicSheet").hidden = false; $("musicClose").focus(); }
+  function closeMusic(){ $("musicSheet").hidden = true; }
+  $("musicBtn").onclick = openMusic;
+  $("musicClose").onclick = closeMusic;
+  $("musicBg").onclick = closeMusic;
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("musicSheet").hidden) closeMusic(); });
+  if (musicPref.get()) $("musicBtn").classList.add("playing");
+
   ["camInput","fileInput"].forEach(id => $(id).addEventListener("click", warmBrain));
   $("stopBtn").onclick = () => ctl?.abort();
   $("resetBtn").onclick = reset;
