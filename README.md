@@ -2,9 +2,15 @@
 
 Tag et billede af det, der roder, og en AI-robot laver en plan med én konkret oprydningsopgave ad gangen. Du kan se hvor lang tid det tager, og krydse opgaverne af undervejs.
 
-## Bemærk
+## Robottens nøgle
 
-AI-delen bruger Claude og virker kun, når appen åbnes som artifact inde i Claude. På GitHub Pages virker kamera, plan og afkrydsning, og eksemplet kan prøves, men robotten kan ikke se billeder.
+Inde i Claude bruger robotten din Claude-konto. På GitHub-siden skal robotten have en API-nøgle fra Anthropic:
+
+1. Lav en nøgle på https://console.anthropic.com/settings/keys
+2. Køb lidt kredit under Billing
+3. Åbn appen, indsæt nøglen og tryk Gem
+
+Nøglen gemmes kun i browseren på den enhed, du bruger. Den ligger ikke i koden her på GitHub.
 
 ## Kør siden
 

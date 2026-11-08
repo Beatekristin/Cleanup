@@ -109,6 +109,13 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 .list li .min{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
 
 .note{font-size:14px;color:var(--muted)}
+.keybox{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 16px}
+.keyform{display:flex;flex-direction:column;gap:10px}
+.keyform a{color:var(--primary);font-weight:700}
+.keyrow{display:flex;gap:8px;flex-wrap:wrap}
+.keyrow input{flex:1 1 200px;min-width:0;font:inherit;font-size:16px;padding:14px 16px;border-radius:999px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink)}
+.keyrow .btn{min-height:50px;padding:12px 22px}
+.keyok{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:15px}
 .err{background:color-mix(in srgb,var(--danger) 12%,var(--surface));border:1px solid var(--danger);color:var(--ink);border-radius:14px;padding:12px 14px;font-size:15px}
 .example-tag{display:inline-block;background:var(--sponge);color:var(--sponge-ink);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:6px}
 .finish{text-align:center;display:flex;flex-direction:column;gap:12px;align-items:center;padding:12px 0}
@@ -160,6 +167,20 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
     <input type="file" id="camInput" accept="image/*" capture="environment">
     <input type="file" id="fileInput" accept="image/*">
     <p class="note" id="aiNote"></p>
+    <div class="keybox" id="keyBox" hidden>
+      <div id="keyForm" class="keyform">
+        <label class="label" for="apiKey">Robottens nøgle</label>
+        <p class="note">For at robotten kan se billeder her, skal den have en API-nøgle fra Anthropic. Den gemmes kun på denne enhed. Lav en nøgle på <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>.</p>
+        <div class="keyrow">
+          <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
+          <button class="btn btn-primary" id="saveKey">Gem</button>
+        </div>
+      </div>
+      <div id="keyOk" class="keyok" hidden>
+        <span><b>Robotten er klar</b> til at se dine billeder.</span>
+        <button class="ghost" id="changeKey">Skift nøgle</button>
+      </div>
+    </div>
     <div id="exampleWrap" style="display:flex;flex-direction:column;gap:12px;margin-top:8px">
       <div><span class="example-tag">Eksempel</span></div>
       <p class="note">Sådan ser en plan ud for en stue med kaffekop, tallerken og legetøj på gulvet.</p>
@@ -235,6 +256,68 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
   let ctl = null;
   let sample = null;
   let canImages = false;
+  let mode = "claude";
+  const MODEL = "claude-sonnet-5-5";
+  const keyStore = {
+    get(){ try{ return localStorage.getItem("ryd-key")||""; }catch(e){ return ""; } },
+    set(v){ try{ v ? localStorage.setItem("ryd-key", v) : localStorage.removeItem("ryd-key"); }catch(e){} }
+  };
+  function showKey(){
+    const has = !!keyStore.get();
+    $("keyForm").hidden = has; $("keyOk").hidden = !has;
+    $("aiNote").textContent = has ? "" : "Du kan også prøve eksemplet uden nøgle.";
+  }
+  $("saveKey").onclick = () => {
+    const v = $("apiKey").value.trim();
+    if (!/^sk-ant-/.test(v)){ err("Nøglen ser forkert ud. Den starter med sk-ant-"); return; }
+    keyStore.set(v); $("apiKey").value = ""; err(""); showKey();
+    say("Tak!", "Nu kan jeg se. Tag et billede af det, der roder.");
+  };
+  $("changeKey").onclick = () => { keyStore.set(""); showKey(); $("apiKey").focus(); };
+
+  function shrink(file){
+    return new Promise((resolve, reject) => {
+      const img = new Image(), url = URL.createObjectURL(file);
+      img.onload = () => {
+        const max = 1568, k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.naturalWidth*k); c.height = Math.round(img.naturalHeight*k);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        resolve(c.toDataURL("image/jpeg", 0.85).split(",")[1]);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject({code:"image_rejected"}); };
+      img.src = url;
+    });
+  }
+
+  async function askApi(file, text, signal){
+    const key = keyStore.get();
+    if (!key) throw {code:"no_key"};
+    const data = await shrink(file);
+    let res;
+    try {
+      res = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST", signal,
+        headers:{ "content-type":"application/json", "x-api-key":key, "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true" },
+        body: JSON.stringify({ model: MODEL, max_tokens: 2000, messages:[{ role:"user", content:[
+          { type:"image", source:{ type:"base64", media_type:"image/jpeg", data } },
+          { type:"text", text }
+        ]}]})
+      });
+    } catch(e){ throw {code: e?.name==="AbortError" ? "cancelled" : "upstream_error"}; }
+    if (res.status === 401 || res.status === 403) throw {code:"bad_key"};
+    if (res.status === 429) throw {code:"rate_limited"};
+    if (res.status === 400){
+      const j = await res.json().catch(()=>null);
+      throw {code: /credit/i.test(j?.error?.message||"") ? "no_credit" : "upstream_error"};
+    }
+    if (!res.ok) throw {code:"upstream_error"};
+    const j = await res.json();
+    const out = (j.content||[]).filter(b => b.type==="text").map(b => b.text).join("");
+    const a = out.indexOf("{"), b = out.lastIndexOf("}");
+    try { return JSON.parse(out.slice(a, b+1)); } catch(e){ throw {code:"invalid_json"}; }
+  }
 
   const store = {
     get(){ try{ return JSON.parse(localStorage.getItem("ryd-plan")||"null"); }catch(e){ return null; } },
@@ -266,7 +349,7 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
   // AI availability
   (async () => {
     try { sample = await window.claude?.use?.("sample"); } catch(e){ sample = null; }
-    if (!sample){ $("aiNote").textContent = "Robotten kan kun se billeder, når siden er åbnet i Claude. Du kan stadig prøve eksemplet."; return; }
+    if (!sample){ mode = "api"; $("keyBox").hidden = false; showKey(); return; }
     try { const lim = await sample.limits(); canImages = !!lim.images; } catch(e){ canImages = false; }
     $("aiNote").textContent = canImages ? "Første gang spørger Claude, om robotten må se dit billede." : "Billeder kan ikke sendes i denne visning. Prøv eksemplet i stedet.";
   })();
@@ -289,13 +372,16 @@ Hvis billedet ikke viser et rum eller noget der roder, så giv "opgaver": [] og 
   async function analyze(file, extra){
     err("");
     if (!file) return;
-    if (!sample || !canImages){ err("Robotten kan ikke se billeder her. Åbn siden i Claude, eller prøv eksemplet."); return; }
+    if (mode === "api" && !keyStore.get()){ err("Robotten mangler sin nøgle. Indsæt den i feltet og tryk Gem."); $("keyBox").scrollIntoView({behavior:"smooth"}); return; }
+    if (mode !== "api" && (!sample || !canImages)){ err("Billeder kan ikke sendes i denne visning. Prøv eksemplet i stedet."); return; }
     $("photoImg").src = URL.createObjectURL(file);
     show("viewScan"); bot("think");
     say("Jeg kigger…", "Jeg finder de ting, der skal på plads, og laver en plan.");
     ctl = new AbortController();
     try {
-      const data = await sample.json(prompt(extra), { images: file, signal: ctl.signal, cache: false });
+      const data = mode === "api"
+        ? await askApi(file, prompt(extra), ctl.signal)
+        : await sample.json(prompt(extra), { images: file, signal: ctl.signal, cache: false });
       const opg = Array.isArray(data?.opgaver) ? data.opgaver.filter(o => o && o.titel).slice(0,12) : [];
       if (!opg.length){
         show("viewStart"); bot();
@@ -313,7 +399,10 @@ Hvis billedet ikke viser et rum eller noget der roder, så giv "opgaver": [] og 
         image_rejected: "Billedet kunne ikke læses. Prøv et andet billede (JPG eller PNG).",
         invalid_json: "Robotten blev forvirret. Prøv at tage billedet igen.",
         refused: "Robotten kan ikke hjælpe med det billede. Prøv et andet.",
-        images_unavailable: "Billeder kan ikke sendes i denne visning."
+        images_unavailable: "Billeder kan ikke sendes i denne visning.",
+        no_key: "Robotten mangler sin nøgle. Indsæt den i feltet og tryk Gem.",
+        bad_key: "Nøglen virker ikke. Tryk Skift nøgle og indsæt en ny fra console.anthropic.com.",
+        no_credit: "Der er ingen kredit på din Anthropic-konto. Køb kredit på console.anthropic.com under Billing."
       };
       const m = map[e?.code] ?? "Noget gik galt med forbindelsen. Prøv igen.";
       if (m) err(m);
