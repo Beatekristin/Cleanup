@@ -10,168 +10,232 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ryd op">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Oprydningsrobotten</title>
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=neue-montreal@400,500,700&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;700;800&display=swap">
 <style>
-/* Layout: one narrow column like a phone app. Robot speaks at top, one big task card at a time, checklist below. */
+/* Layout: a teal "robot dock" band at the top with a big talking robot, then a light sheet that slides up over it holding the work. Sticker style: thick ink outlines and hard offset shadows that press in when tapped. */
 :root{
-  --bg:#EAF1EF; --surface:#FFFFFF; --ink:#13201C; --muted:#5A6B66; --line:#CFDCD8;
-  --primary:#0D6E5F; --primary-ink:#FFFFFF; --sponge:#F2C12E; --sponge-ink:#2A2100;
-  --done:#2E8B57; --soft:#DCEAE6; --danger:#B3402F;
+  --bg:#F3F7F5; --sheet:#F3F7F5; --surface:#FFFFFF; --ink:#13201C; --muted:#5A6B66; --line:#D3E0DC;
+  --edge:#13201C; --dock:#0D6E5F; --dock-2:#0A5A4E; --dock-ink:#FFFFFF;
+  --primary:#0D6E5F; --primary-ink:#FFFFFF; --sponge:#F7C63A; --sponge-ink:#231B00;
+  --mint:#9EE6CF; --done:#1F9D61; --soft:#E3EEEA; --danger:#C2412E;
   --font:"PP Neue Montreal","Neue Montreal","Hanken Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#0F1715; --surface:#18231F; --ink:#E6EFEC; --muted:#93A8A1; --line:#2A3A35;
-  --primary:#3FBFA6; --primary-ink:#06231D; --sponge:#F2C12E; --sponge-ink:#2A2100;
-  --done:#5CCB8C; --soft:#1F302B; --danger:#E7816F; color-scheme:dark}}
+  --bg:#0C1412; --sheet:#0C1412; --surface:#16211E; --ink:#EAF3F0; --muted:#97ACA5; --line:#26352F;
+  --edge:#000000; --dock:#0B4F45; --dock-2:#083E36; --dock-ink:#FFFFFF;
+  --primary:#2FB596; --primary-ink:#04201A; --sponge:#F7C63A; --sponge-ink:#231B00;
+  --mint:#5FD1B0; --done:#3CC77F; --soft:#1C2B27; --danger:#EC8571; color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#0F1715; --surface:#18231F; --ink:#E6EFEC; --muted:#93A8A1; --line:#2A3A35;
-  --primary:#3FBFA6; --primary-ink:#06231D; --sponge:#F2C12E; --sponge-ink:#2A2100;
-  --done:#5CCB8C; --soft:#1F302B; --danger:#E7816F; color-scheme:dark}
+  --bg:#0C1412; --sheet:#0C1412; --surface:#16211E; --ink:#EAF3F0; --muted:#97ACA5; --line:#26352F;
+  --edge:#000000; --dock:#0B4F45; --dock-2:#083E36; --dock-ink:#FFFFFF;
+  --primary:#2FB596; --primary-ink:#04201A; --sponge:#F7C63A; --sponge-ink:#231B00;
+  --mint:#5FD1B0; --done:#3CC77F; --soft:#1C2B27; --danger:#EC8571; color-scheme:dark}
 
 *{box-sizing:border-box}
+[hidden]{display:none!important}
+img{max-width:100%}
 html,body{min-height:100%}
-body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.45;
-  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
-.app{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
-h1,h2,h3{margin:0;text-wrap:balance;letter-spacing:-.01em}
+body{background:var(--dock);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.45;margin:0;-webkit-tap-highlight-color:transparent}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--dock);z-index:10}
+h1,h2,h3{margin:0;text-wrap:balance;letter-spacing:-.02em}
 p{margin:0}
 button,label.btn{font:inherit;cursor:pointer}
-:focus-visible{outline:3px solid var(--sponge);outline-offset:2px}
+:focus-visible{outline:3px solid var(--sponge);outline-offset:3px}
+.wrap{max-width:560px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 
-/* Header */
+/* Dock */
+.dock{position:relative;color:var(--dock-ink);overflow:hidden;
+  background:
+    radial-gradient(circle at 12% 30%, rgba(255,255,255,.14) 0 18px, transparent 19px),
+    radial-gradient(circle at 18% 62%, rgba(255,255,255,.10) 0 8px, transparent 9px),
+    radial-gradient(circle at 88% 22%, rgba(255,255,255,.12) 0 26px, transparent 27px),
+    radial-gradient(circle at 78% 70%, rgba(255,255,255,.08) 0 12px, transparent 13px),
+    radial-gradient(circle at 52% 10%, rgba(255,255,255,.10) 0 6px, transparent 7px),
+    linear-gradient(180deg,var(--dock),var(--dock-2))}
+.dock .wrap{padding-block:calc(14px + env(safe-area-inset-top,0px)) 56px;display:flex;flex-direction:column;gap:14px}
 .top{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.brand{font-weight:700;font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
-.ghost{background:none;border:0;color:var(--muted);font-size:14px;text-decoration:underline;text-underline-offset:3px;padding:6px 0}
+.brand{font-weight:700;font-size:13px;letter-spacing:.14em;text-transform:uppercase;opacity:.85;display:flex;align-items:center;gap:8px}
+.brand i{width:8px;height:8px;border-radius:50%;background:var(--sponge);box-shadow:0 0 0 3px rgba(247,198,58,.3)}
+.ghost{background:none;border:0;color:inherit;opacity:.85;font-size:14px;font-weight:500;text-decoration:underline;text-underline-offset:3px;padding:6px 0}
+.sheet .ghost{color:var(--muted);opacity:1}
 
-/* Robot + speech */
-.speaker{display:grid;grid-template-columns:84px 1fr;gap:14px;align-items:end}
-.bot{width:84px;height:96px}
-.bot .eye{transition:transform .2s}
-.bot.think .antenna-dot{animation:blink 1s infinite}
-.bot.happy{animation:hop .6s ease 2}
-@keyframes blink{50%{fill:var(--sponge)}}
-@keyframes hop{40%{transform:translateY(-10px) rotate(-4deg)}}
-.bubble{background:var(--surface);border:1px solid var(--line);border-radius:18px 18px 18px 4px;padding:14px 16px;min-width:0}
-.bubble h1{font-size:clamp(22px,5.5vw,28px);font-weight:700;line-height:1.15}
-.bubble p{color:var(--muted);margin-top:6px}
+.speaker{display:grid;grid-template-columns:118px 1fr;gap:12px;align-items:end}
+.bot{width:118px;height:134px;overflow:visible;filter:drop-shadow(0 6px 0 rgba(0,0,0,.18))}
+.bot .eye{transform-box:fill-box;transform-origin:center;animation:blinkEye 4.2s infinite}
+.bot .antenna{transform-box:fill-box;transform-origin:50% 100%;animation:wiggle 3s ease-in-out infinite}
+.bot.think .antenna-dot{animation:glow .8s infinite}
+.bot.think .eye{animation:look 1.2s ease-in-out infinite}
+.bot.happy{animation:hop .55s ease 2}
+.bot.happy .eye{animation:none;transform:scaleY(.35)}
+@keyframes blinkEye{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
+@keyframes look{0%,100%{transform:translateX(-3px)}50%{transform:translateX(3px)}}
+@keyframes wiggle{0%,100%{transform:rotate(-6deg)}50%{transform:rotate(6deg)}}
+@keyframes glow{50%{fill:#FFFFFF}}
+@keyframes hop{40%{transform:translateY(-14px) rotate(-5deg)}}
+.bubble{position:relative;background:var(--surface);color:var(--ink);border:3px solid var(--edge);border-radius:22px;padding:14px 16px;min-width:0;box-shadow:5px 5px 0 var(--edge);margin-bottom:22px}
+.bubble::after{content:"";position:absolute;left:-14px;bottom:18px;width:18px;height:18px;background:var(--surface);border-left:3px solid var(--edge);border-bottom:3px solid var(--edge);transform:skewY(30deg) rotate(10deg)}
+.bubble h1{font-size:clamp(21px,5.6vw,27px);font-weight:700;line-height:1.12}
+.bubble p{color:var(--muted);margin-top:6px;font-size:15px}
 
-/* Capture */
-.capture{display:flex;flex-direction:column;gap:12px}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;border:0;border-radius:999px;
-  padding:16px 22px;font-weight:700;font-size:17px;min-height:56px;text-align:center}
+/* Sheet */
+.sheet{position:relative;background:var(--sheet);border-radius:28px 28px 0 0;margin-top:-30px;min-height:60vh}
+.sheet>.wrap{padding-block:24px calc(56px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:18px}
+.sheet::before{content:"";position:absolute;top:10px;left:50%;width:44px;height:5px;margin-left:-22px;border-radius:5px;background:var(--line)}
+
+.capture{display:flex;flex-direction:column;gap:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;border:3px solid var(--edge);border-radius:18px;
+  padding:14px 20px;font-weight:700;font-size:17px;min-height:58px;text-align:center;box-shadow:0 5px 0 var(--edge);
+  transition:transform .08s ease,box-shadow .08s ease;user-select:none}
+.btn:active{transform:translateY(5px);box-shadow:0 0 0 var(--edge)}
 .btn-primary{background:var(--primary);color:var(--primary-ink)}
 .btn-sponge{background:var(--sponge);color:var(--sponge-ink)}
-.btn-line{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+.btn-line{background:var(--surface);color:var(--ink)}
+.btn-hero{min-height:76px;font-size:20px;border-radius:22px;background:var(--sponge);color:var(--sponge-ink)}
+.btn-hero svg{width:30px;height:30px}
 .btn:disabled{opacity:.5;cursor:default}
 .row{display:flex;gap:10px;flex-wrap:wrap}
-.row>.btn{flex:1 1 160px}
+.row>.btn{flex:1 1 150px}
 input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
-.rooms{display:flex;flex-wrap:wrap;gap:8px}
-.chip{border:1.5px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:8px 14px;font-size:14px;font-weight:500}
-.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
-.label{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.rooms{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 8px;margin-inline:-2px;scrollbar-width:none}
+.rooms::-webkit-scrollbar{display:none}
+.chip{flex:none;border:2.5px solid var(--edge);background:var(--surface);color:var(--ink);border-radius:999px;padding:8px 15px;font-size:15px;font-weight:500;box-shadow:0 3px 0 var(--edge);transition:transform .08s,box-shadow .08s}
+.chip:active{transform:translateY(3px);box-shadow:none}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.label{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 
-.photo{position:relative;border-radius:16px;overflow:hidden;background:var(--soft);aspect-ratio:4/3;max-width:100%}
-.photo img{width:100%;height:100%;object-fit:cover;display:block}
-.scan{position:absolute;inset:0;background:linear-gradient(180deg,transparent 0%,color-mix(in srgb,var(--sponge) 55%,transparent) 50%,transparent 100%);
-  background-size:100% 40%;background-repeat:no-repeat;animation:scan 1.6s linear infinite}
-@keyframes scan{from{background-position:0 -40%}to{background-position:0 140%}}
+/* Scan */
+.photo{position:relative;border-radius:22px;overflow:hidden;background:var(--soft);aspect-ratio:3/4;max-height:62vh;max-width:100%;border:3px solid var(--edge);box-shadow:6px 6px 0 var(--edge)}
+.photo img{width:100%;height:100%;object-fit:cover;display:block;filter:saturate(.85) contrast(1.05)}
+.grid{position:absolute;inset:0;background-image:linear-gradient(rgba(158,230,207,.25) 1px,transparent 1px),linear-gradient(90deg,rgba(158,230,207,.25) 1px,transparent 1px);background-size:32px 32px;mix-blend-mode:screen}
+.scan{position:absolute;left:0;right:0;height:34%;top:-34%;background:linear-gradient(180deg,transparent,rgba(158,230,207,.55) 85%,#9EE6CF 100%);animation:scan 1.8s cubic-bezier(.5,0,.5,1) infinite alternate}
+@keyframes scan{to{top:100%}}
+.corner{position:absolute;width:34px;height:34px;border:4px solid var(--sponge)}
+.c1{top:14px;left:14px;border-right:0;border-bottom:0;border-radius:10px 0 0 0}
+.c2{top:14px;right:14px;border-left:0;border-bottom:0;border-radius:0 10px 0 0}
+.c3{bottom:14px;left:14px;border-right:0;border-top:0;border-radius:0 0 0 10px}
+.c4{bottom:14px;right:14px;border-left:0;border-top:0;border-radius:0 0 10px 0}
+.scan-tag{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);background:var(--edge);color:#fff;font-weight:700;font-size:14px;padding:8px 14px;border-radius:999px;white-space:nowrap;display:flex;gap:8px;align-items:center}
+.scan-tag i{width:8px;height:8px;border-radius:50%;background:var(--mint);animation:glowDot 1s infinite}
+@keyframes glowDot{50%{opacity:.2}}
 
-/* Progress */
-.progress{display:flex;flex-direction:column;gap:8px}
-.progress-head{display:flex;justify-content:space-between;font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
-.bar{height:12px;background:var(--soft);border-radius:999px;overflow:hidden}
-.bar>i{display:block;height:100%;width:0;background:var(--done);border-radius:999px;transition:width .5s ease}
+/* Stats */
+.stats{display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:center;background:var(--ink);color:var(--surface);border-radius:24px;padding:16px 20px 16px 16px;border:3px solid var(--edge);box-shadow:6px 6px 0 var(--sponge)}
+.ring{position:relative;width:108px;height:108px}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ring .bgc{stroke:rgba(255,255,255,.14)}
+.ring .fgc{stroke:var(--sponge);transition:stroke-dashoffset .7s cubic-bezier(.3,1.3,.5,1)}
+.ring-txt{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.ring-txt strong{font-size:34px;font-weight:700;font-variant-numeric:tabular-nums}
+.ring-txt span{font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.75;margin-top:4px}
+.stat-list{display:flex;flex-direction:column;gap:12px;min-width:0}
+.stat-list .label{color:inherit;opacity:.65;display:block;margin-bottom:2px}
+.stat-list strong{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+.dots{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+.dots i{width:12px;height:12px;border-radius:4px;background:rgba(255,255,255,.18)}
+.dots i.on{background:var(--mint)}
 
 /* Current task */
-.task{background:var(--surface);border:2px solid var(--ink);border-radius:22px;padding:22px;display:flex;flex-direction:column;gap:14px;box-shadow:6px 6px 0 var(--sponge)}
-.task .where{display:inline-flex;align-self:flex-start;background:var(--soft);color:var(--ink);font-size:13px;font-weight:700;padding:5px 10px;border-radius:999px}
-.task h2{font-size:clamp(24px,6.5vw,32px);line-height:1.1;font-weight:700}
+.task{position:relative;background:var(--surface);border:3px solid var(--edge);border-radius:26px;padding:22px;display:flex;flex-direction:column;gap:14px;box-shadow:8px 8px 0 var(--edge)}
+.task-top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.task .where{display:inline-flex;align-items:center;gap:6px;background:var(--mint);color:#06241C;font-size:14px;font-weight:700;padding:6px 12px;border-radius:999px;border:2px solid var(--edge)}
+.task .meta{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;font-weight:500}
+.task h2{font-size:clamp(26px,7vw,34px);line-height:1.05;font-weight:700}
 .task p{color:var(--muted);font-size:17px}
-.task .meta{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
-.pop{animation:pop .35s ease}
-@keyframes pop{from{transform:scale(.96);opacity:.4}to{transform:none;opacity:1}}
-
-/* Total time */
-.total{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;background:var(--ink);color:var(--bg);border-radius:18px;padding:14px 18px}
-.total .label{color:inherit;opacity:.7;display:block}
-.total strong{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
-.total-left{text-align:right}
-.total-left strong{color:var(--sponge)}
+.task .min-badge{position:absolute;top:-16px;right:18px;background:var(--sponge);color:var(--sponge-ink);border:3px solid var(--edge);border-radius:999px;font-weight:700;font-size:14px;padding:4px 12px;transform:rotate(4deg)}
+.pop{animation:pop .4s cubic-bezier(.3,1.4,.5,1)}
+.out{animation:out .22s ease-in forwards}
+@keyframes pop{from{transform:translateY(16px) scale(.96);opacity:0}to{transform:none;opacity:1}}
+@keyframes out{to{transform:translateX(110%) rotate(8deg);opacity:0}}
 
 /* List */
-.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;border-top:1px solid var(--line)}
-.list li{display:grid;grid-template-columns:28px 1fr auto;gap:12px;align-items:start;padding:12px 2px;border-bottom:1px solid var(--line)}
-.list li button.tick{width:28px;height:28px;transition:background .2s,border-color .2s;border-radius:50%;border:2px solid var(--line);background:transparent;padding:0;display:grid;place-items:center;color:var(--primary-ink)}
+.list-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.list li{display:grid;grid-template-columns:32px 1fr auto;gap:12px;align-items:center;padding:12px 14px;background:var(--surface);border:2px solid var(--line);border-radius:16px;transition:border-color .2s,background .2s}
+.list li.current{border-color:var(--edge);border-width:2.5px}
+.list li.done{background:var(--soft);border-color:transparent}
+.list li button.tick{width:32px;height:32px;border-radius:10px;border:2.5px solid var(--edge);background:var(--surface);padding:0;display:grid;place-items:center;color:#fff;transition:background .2s,transform .15s}
+.list li button.tick:active{transform:scale(.9)}
 .list li.done button.tick{background:var(--done);border-color:var(--done)}
 .list li .t{min-width:0}
-.list li .t b{font-weight:500;display:block}
-.list li .t b{background:linear-gradient(var(--done),var(--done)) no-repeat 0 55%/0 2px;transition:background-size .35s ease,color .2s}
-.list li.done .t b{background-size:100% 2px;color:var(--muted)}
-.list li.done .min{text-decoration:line-through}
+.list li .t b{font-weight:500;display:inline;background:linear-gradient(var(--done),var(--done)) no-repeat 0 58%/0 2.5px;transition:background-size .35s ease,color .2s}
+.list li.done .t b{background-size:100% 2.5px;color:var(--muted)}
 .list li.current .t b{font-weight:700}
-.list li small{color:var(--muted);font-size:13px}
-.list li .min{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.list li small{display:block;color:var(--muted);font-size:13px}
+.list li .min{font-size:13px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.list li.done .min{text-decoration:line-through}
+.list li>span:first-child{width:32px;height:32px;border-radius:10px;border:2.5px dashed var(--line)}
 
 .note{font-size:14px;color:var(--muted)}
-.keybox{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 16px}
+.keybox{background:var(--surface);border:2.5px solid var(--edge);border-radius:20px;padding:16px;box-shadow:4px 4px 0 var(--edge)}
 .keyform{display:flex;flex-direction:column;gap:10px}
 .keyform a{color:var(--primary);font-weight:700}
 .keyrow{display:flex;gap:8px;flex-wrap:wrap}
-.keyrow input{flex:1 1 200px;min-width:0;font:inherit;font-size:16px;padding:14px 16px;border-radius:999px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink)}
-.keyrow .btn{min-height:50px;padding:12px 22px}
+.keyrow input{flex:1 1 200px;min-width:0;font:inherit;font-size:16px;padding:14px 16px;border-radius:14px;border:2.5px solid var(--edge);background:var(--bg);color:var(--ink)}
+.keyrow .btn{min-height:52px;padding:10px 22px}
 .keyok{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:15px}
-.err{background:color-mix(in srgb,var(--danger) 12%,var(--surface));border:1px solid var(--danger);color:var(--ink);border-radius:14px;padding:12px 14px;font-size:15px}
-.example-tag{display:inline-block;background:var(--sponge);color:var(--sponge-ink);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:6px}
-.finish{text-align:center;display:flex;flex-direction:column;gap:12px;align-items:center;padding:12px 0}
-.finish .big{font-size:56px;line-height:1}
+.keyok b{color:var(--done)}
+.err{background:color-mix(in srgb,var(--danger) 12%,var(--surface));border:2.5px solid var(--danger);color:var(--ink);border-radius:16px;padding:12px 14px;font-size:15px;font-weight:500}
+.example{display:flex;flex-direction:column;gap:12px;padding-top:6px}
+.example-tag{display:inline-block;background:var(--sponge);color:var(--sponge-ink);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:4px 9px;border-radius:8px;border:2px solid var(--edge)}
+.finish{text-align:center;display:flex;flex-direction:column;gap:14px;align-items:center;padding:6px 0}
+.medal{width:120px;height:120px;border-radius:50%;background:var(--sponge);border:4px solid var(--edge);box-shadow:0 7px 0 var(--edge);display:grid;place-items:center;animation:spinIn .7s cubic-bezier(.3,1.5,.5,1)}
+.medal svg{width:64px;height:64px;color:var(--sponge-ink)}
+@keyframes spinIn{from{transform:scale(0) rotate(-180deg)}}
+.finish h2{font-size:32px}
 .confetti{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:20}
-.confetti i{position:absolute;top:-12px;width:10px;height:14px;border-radius:2px;animation:fall linear forwards}
+.confetti i{position:absolute;top:-14px;width:10px;height:16px;border-radius:3px;animation:fall linear forwards}
 @keyframes fall{to{transform:translateY(110vh) rotate(720deg)}}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
 
-<div class="app">
-  <div class="top">
-    <span class="brand">Oprydningsrobotten</span>
-    <button class="ghost" id="resetBtn" hidden>Start forfra</button>
-  </div>
-
-  <div class="speaker">
-    <svg class="bot" id="bot" viewBox="0 0 84 96" aria-hidden="true">
-      <line x1="42" y1="4" x2="42" y2="18" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/>
-      <circle class="antenna-dot" cx="42" cy="6" r="5" fill="var(--primary)"/>
-      <rect x="10" y="18" width="64" height="46" rx="16" fill="var(--surface)" stroke="var(--ink)" stroke-width="3"/>
-      <rect x="18" y="27" width="48" height="26" rx="10" fill="var(--ink)"/>
-      <circle class="eye" id="eyeL" cx="32" cy="40" r="5" fill="var(--sponge)"/>
-      <circle class="eye" id="eyeR" cx="52" cy="40" r="5" fill="var(--sponge)"/>
-      <rect x="22" y="66" width="40" height="22" rx="8" fill="var(--primary)" stroke="var(--ink)" stroke-width="3"/>
-      <rect x="2" y="68" width="16" height="8" rx="4" fill="var(--sponge)" stroke="var(--ink)" stroke-width="2.5"/>
-      <rect x="66" y="68" width="16" height="8" rx="4" fill="var(--sponge)" stroke="var(--ink)" stroke-width="2.5"/>
-      <circle cx="32" cy="92" r="3.5" fill="var(--ink)"/><circle cx="52" cy="92" r="3.5" fill="var(--ink)"/>
-    </svg>
-    <div class="bubble" aria-live="polite">
-      <h1 id="sayTitle">Hej! Vis mig rodet.</h1>
-      <p id="sayText">Tag et billede af det, der roder. Så laver jeg en plan med én lille opgave ad gangen.</p>
+<header class="dock">
+  <div class="wrap">
+    <div class="top">
+      <span class="brand"><i></i>Oprydningsrobotten</span>
+      <button class="ghost" id="resetBtn" hidden>Start forfra</button>
+    </div>
+    <div class="speaker">
+      <svg class="bot" id="bot" viewBox="0 0 120 134" aria-hidden="true">
+        <g class="antenna"><line x1="60" y1="8" x2="60" y2="28" stroke="var(--edge)" stroke-width="4.5" stroke-linecap="round"/>
+        <circle class="antenna-dot" cx="60" cy="10" r="8" fill="var(--sponge)" stroke="var(--edge)" stroke-width="4"/></g>
+        <rect x="8" y="44" width="12" height="26" rx="6" fill="var(--sponge)" stroke="var(--edge)" stroke-width="4"/>
+        <rect x="100" y="44" width="12" height="26" rx="6" fill="var(--sponge)" stroke="var(--edge)" stroke-width="4"/>
+        <rect x="16" y="26" width="88" height="64" rx="24" fill="#FFFFFF" stroke="var(--edge)" stroke-width="4.5"/>
+        <rect x="27" y="38" width="66" height="38" rx="15" fill="#13201C"/>
+        <ellipse class="eye" cx="46" cy="57" rx="7" ry="8" fill="var(--mint)"/>
+        <ellipse class="eye" cx="74" cy="57" rx="7" ry="8" fill="var(--mint)"/>
+        <circle cx="36" cy="72" r="3" fill="#F49A8C" opacity=".8"/><circle cx="84" cy="72" r="3" fill="#F49A8C" opacity=".8"/>
+        <rect x="34" y="94" width="52" height="30" rx="10" fill="var(--sponge)" stroke="var(--edge)" stroke-width="4.5"/>
+        <rect x="50" y="102" width="20" height="8" rx="4" fill="var(--edge)"/>
+        <path d="M34 106 L14 96" stroke="var(--edge)" stroke-width="4.5" stroke-linecap="round"/>
+        <path d="M86 106 L106 96" stroke="var(--edge)" stroke-width="4.5" stroke-linecap="round"/>
+        <circle cx="12" cy="95" r="6" fill="#FFFFFF" stroke="var(--edge)" stroke-width="4"/>
+        <circle cx="108" cy="95" r="6" fill="#FFFFFF" stroke="var(--edge)" stroke-width="4"/>
+      </svg>
+      <div class="bubble" aria-live="polite">
+        <h1 id="sayTitle">Hej! Vis mig rodet.</h1>
+        <p id="sayText">Tag et billede af det, der roder. Så laver jeg en plan med én lille opgave ad gangen.</p>
+      </div>
     </div>
   </div>
+</header>
 
+<main class="sheet">
+ <div class="wrap">
   <!-- START -->
   <section id="viewStart" class="capture">
     <span class="label">Hvor er du?</span>
     <div class="rooms" id="rooms"></div>
-    <div class="row">
-      <label class="btn btn-primary" for="camInput">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
-        Tag billede
-      </label>
-      <label class="btn btn-line" for="fileInput">Vælg fra billeder</label>
-    </div>
+    <label class="btn btn-hero" for="camInput">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+      Tag billede af rodet
+    </label>
+    <label class="btn btn-line" for="fileInput">Vælg fra billeder</label>
     <input type="file" id="camInput" accept="image/*" capture="environment">
     <input type="file" id="fileInput" accept="image/*">
     <p class="note" id="aiNote"></p>
@@ -185,11 +249,11 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
         </div>
       </div>
       <div id="keyOk" class="keyok" hidden>
-        <span><b>Robotten er klar</b> til at se dine billeder.</span>
+        <span><b>● Robotten er klar</b> til at se dine billeder.</span>
         <button class="ghost" id="changeKey">Skift nøgle</button>
       </div>
     </div>
-    <div id="exampleWrap" style="display:flex;flex-direction:column;gap:12px;margin-top:8px">
+    <div class="example" id="exampleWrap">
       <div><span class="example-tag">Eksempel</span></div>
       <p class="note">Sådan ser en plan ud for en stue med kaffekop, tallerken og legetøj på gulvet.</p>
       <ul class="list" id="exampleList"></ul>
@@ -199,39 +263,46 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 
   <!-- ANALYZING -->
   <section id="viewScan" class="capture" hidden>
-    <div class="photo"><img id="photoImg" alt="Dit billede"><div class="scan"></div></div>
+    <div class="photo">
+      <img id="photoImg" alt="Dit billede">
+      <div class="grid"></div><div class="scan"></div>
+      <i class="corner c1"></i><i class="corner c2"></i><i class="corner c3"></i><i class="corner c4"></i>
+      <div class="scan-tag"><i></i><span id="scanWord">Scanner rummet</span></div>
+    </div>
     <button class="btn btn-line" id="stopBtn">Stop</button>
   </section>
 
   <!-- WORK -->
   <section id="viewWork" class="capture" hidden>
-    <div class="total">
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></svg>
-      <div><span class="label">Det tager cirka</span><strong id="totalTime"></strong></div>
-      <div class="total-left"><span class="label">Tilbage</span><strong id="leftTime"></strong></div>
+    <div class="stats">
+      <div class="ring">
+        <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="bgc" cx="60" cy="60" r="50" fill="none" stroke-width="12"/><circle class="fgc" id="ringFg" cx="60" cy="60" r="50" fill="none" stroke-width="12" stroke-linecap="round" stroke-dasharray="314.16" stroke-dashoffset="314.16"/></svg>
+        <div class="ring-txt"><strong id="leftTime">0</strong><span>min tilbage</span></div>
+      </div>
+      <div class="stat-list">
+        <div><span class="label">Det tager cirka</span><strong id="totalTime"></strong></div>
+        <div><span class="label">Krydset af</span><strong id="progText"></strong><div class="dots" id="dots"></div></div>
+      </div>
     </div>
-    <div class="progress">
-      <div class="progress-head"><span id="progText">0 af 0 klaret</span><span id="timeText"></span></div>
-      <div class="bar"><i id="barFill"></i></div>
-    </div>
+    <span id="timeText" hidden></span>
     <article class="task" id="taskCard">
-      <span class="where" id="taskWhere"></span>
+      <span class="min-badge" id="taskMin"></span>
+      <div class="task-top"><span class="where" id="taskWhere"></span><span class="meta" id="taskMeta"></span></div>
       <h2 id="taskTitle"></h2>
       <p id="taskDetail"></p>
-      <span class="meta" id="taskMeta"></span>
       <div class="row">
-        <button class="btn btn-sponge" id="doneBtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Kryds af</button>
+        <button class="btn btn-sponge" id="doneBtn"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Kryds af</button>
         <button class="btn btn-line" id="skipBtn">Spring over</button>
       </div>
     </article>
-    <span class="label">Hele planen · tryk på cirklen for at krydse af</span>
+    <div class="list-head"><span class="label">Hele planen</span><span class="note">Tryk på boksen for at krydse af</span></div>
     <ul class="list" id="taskList"></ul>
   </section>
 
   <!-- FINISH -->
   <section id="viewDone" class="finish" hidden>
-    <div class="big" aria-hidden="true">✓</div>
-    <h2 style="font-size:28px">Alt er ryddet op!</h2>
+    <div class="medal" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg></div>
+    <h2>Alt er ryddet op!</h2>
     <p class="note" id="doneNote">Tag et nyt billede, så tjekker jeg om der er mere.</p>
     <div class="row" style="width:100%">
       <label class="btn btn-primary" for="camInput2">Tag efterbillede</label>
@@ -241,7 +312,8 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
   </section>
 
   <div id="errBox" class="err" hidden></div>
-</div>
+ </div>
+</main>
 
 <script>
 (() => {
@@ -384,6 +456,9 @@ Hvis billedet ikke viser et rum eller noget der roder, så giv "opgaver": [] og 
     if (mode !== "api" && (!sample || !canImages)){ err("Billeder kan ikke sendes i denne visning. Prøv eksemplet i stedet."); return; }
     $("photoImg").src = URL.createObjectURL(file);
     show("viewScan"); bot("think");
+    const words = ["Scanner rummet","Leder efter tallerkener","Tæller legetøj","Finder vasketøj","Tjekker bordet","Laver din plan"];
+    let wi = 0; $("scanWord").textContent = words[0];
+    const wt = setInterval(() => { wi = (wi+1) % words.length; $("scanWord").textContent = words[wi]; }, 1400);
     say("Jeg kigger…", "Jeg finder de ting, der skal på plads, og laver en plan.");
     ctl = new AbortController();
     try {
@@ -415,7 +490,7 @@ Hvis billedet ikke viser et rum eller noget der roder, så giv "opgaver": [] og 
       const m = map[e?.code] ?? "Noget gik galt med forbindelsen. Prøv igen.";
       if (m) err(m);
       if (!plan) say("Hej! Vis mig rodet.", "Tag et billede af det, der roder. Så laver jeg en plan med én lille opgave ad gangen.");
-    } finally { ctl = null; }
+    } finally { ctl = null; clearInterval(wt); }
   }
 
   function startPlan(p){
@@ -436,15 +511,17 @@ Hvis billedet ikke viser et rum eller noget der roder, så giv "opgaver": [] og 
     const all = plan.opgaver.filter(o => o.status!=="skip").reduce((s,o)=>s+o.minutter,0);
     if (fresh){ say(`Det tager ca. ${all} minutter`, (plan.overblik ? plan.overblik+" " : "") + total + " opgaver. " + (plan.opmuntring||"")); bot("happy"); }
     $("totalTime").textContent = `${all} min`;
-    $("leftTime").textContent = `${left} min`;
-    $("progText").textContent = `${done} af ${total} krydset af`;
+    $("leftTime").textContent = left;
+    $("progText").textContent = `${done} af ${total}`;
+    $("dots").innerHTML = plan.opgaver.map(o => `<i class="${o.status==="done"?"on":""}"></i>`).join("");
     $("timeText").textContent = `${total-done-plan.opgaver.filter(o=>o.status==="skip").length} tilbage`;
-    $("barFill").style.width = (total ? done/total*100 : 0) + "%";
+    const C = 314.16; $("ringFg").style.strokeDashoffset = all ? C * (left/all) : C;
     const t = plan.opgaver[i];
     $("taskWhere").textContent = t.hvor ? "→ " + t.hvor : "Opgave";
+    $("taskMin").textContent = `ca. ${t.minutter} min`;
     $("taskTitle").textContent = t.titel;
     $("taskDetail").textContent = t.detalje;
-    $("taskMeta").textContent = `Opgave ${i+1} af ${total} · ca. ${t.minutter} min`;
+    $("taskMeta").textContent = `Opgave ${plan.opgaver.filter(o=>o.status==="done").length+1} af ${total}`;
     const card=$("taskCard"); card.classList.remove("pop"); void card.offsetWidth; card.classList.add("pop");
 
     const ul = $("taskList"); ul.innerHTML = "";
@@ -452,7 +529,7 @@ Hvis billedet ikke viser et rum eller noget der roder, så giv "opgaver": [] og 
       const li = document.createElement("li");
       li.className = (o.status==="done"?"done ":"") + (k===i?"current":"");
       li.innerHTML = `<button class="tick" aria-label="Markér som klaret"></button><div class="t"><b></b><small></small></div><span class="min"></span>`;
-      if (o.status==="done") li.querySelector(".tick").innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><path d="M5 12l5 5 9-10"/></svg>`;
+      if (o.status==="done") li.querySelector(".tick").innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>`;
       li.querySelector("b").textContent = o.titel;
       li.querySelector("small").textContent = (o.status==="skip" ? "Sprunget over · " : "") + o.hvor;
       li.querySelector(".min").textContent = o.minutter + " min";
@@ -468,7 +545,11 @@ Hvis billedet ikke viser et rum eller noget der roder, så giv "opgaver": [] og 
     plan.opgaver[i].status = "done"; store.set(plan);
     const left = plan.opgaver.filter(o=>o.status==="todo").length;
     say(CHEERS[Math.floor(Math.random()*CHEERS.length)], left ? `Kun ${left} ${left===1?"opgave":"opgaver"} tilbage.` : "Det var den sidste!");
-    bot("happy"); render();
+    bot("happy");
+    const card = $("taskCard");
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches){ render(); return; }
+    card.classList.remove("pop"); card.classList.add("out");
+    setTimeout(() => { card.classList.remove("out"); render(); }, 220);
   };
   $("skipBtn").onclick = () => {
     const i = current(); if (i<0) return;
