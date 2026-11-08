@@ -242,9 +242,9 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
     <div class="keybox" id="keyBox" hidden>
       <div id="keyForm" class="keyform">
         <label class="label" for="apiKey">Robottens nøgle</label>
-        <p class="note">For at robotten kan se billeder her, skal den have en API-nøgle fra Anthropic. Den gemmes kun på denne enhed. Lav en nøgle på <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>.</p>
+        <p class="note">Robotten skal have en gratis nøgle fra Google for at kunne se billeder. Lav den på <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>, kopier den og sæt den ind her. Den gemmes kun på denne enhed.</p>
         <div class="keyrow">
-          <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
+          <input type="password" id="apiKey" placeholder="AIza..." autocomplete="off" spellcheck="false">
           <button class="btn btn-primary" id="saveKey">Gem</button>
         </div>
       </div>
@@ -349,7 +349,7 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
   }
   $("saveKey").onclick = () => {
     const v = $("apiKey").value.trim();
-    if (!/^sk-ant-/.test(v)){ err("Nøglen ser forkert ud. Den starter med sk-ant-"); return; }
+    if (!/^(AIza|sk-ant-)/.test(v)){ err("Nøglen ser forkert ud. En Google-nøgle starter med AIza"); return; }
     keyStore.set(v); $("apiKey").value = ""; err(""); showKey();
     say("Tak!", "Nu kan jeg se. Tag et billede af det, der roder.");
   };
@@ -371,9 +371,46 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
     });
   }
 
+  const GEMINI = ["gemini-2.5-flash","gemini-3.5-flash-lite","gemini-2.5-flash-lite"];
+  function parseJson(out){
+    const a = out.indexOf("{"), b = out.lastIndexOf("}");
+    try { return JSON.parse(out.slice(a, b+1)); } catch(e){ throw {code:"invalid_json"}; }
+  }
+  async function askGemini(key, data, text, signal){
+    let last = {code:"upstream_error"};
+    for (const model of GEMINI){
+      let res;
+      try {
+        res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+          method:"POST", signal,
+          headers:{ "content-type":"application/json", "x-goog-api-key":key },
+          body: JSON.stringify({
+            contents:[{ role:"user", parts:[ { inline_data:{ mime_type:"image/jpeg", data } }, { text } ] }],
+            generationConfig:{ responseMimeType:"application/json", temperature:0.4 }
+          })
+        });
+      } catch(e){ throw {code: e?.name==="AbortError" ? "cancelled" : "upstream_error"}; }
+      if (res.ok){
+        const j = await res.json();
+        const out = (j.candidates?.[0]?.content?.parts||[]).map(p => p.text||"").join("");
+        if (!out) { last = {code:"refused"}; continue; }
+        return parseJson(out);
+      }
+      const j = await res.json().catch(()=>null);
+      const msg = (j?.error?.message||"") + " " + (j?.error?.status||"");
+      if (/location|region|not supported in your country/i.test(msg)) throw {code:"region"};
+      if (/API_KEY_INVALID|API key not valid|PERMISSION_DENIED/i.test(msg) || res.status===401 || res.status===403) throw {code:"bad_key"};
+      if (res.status===429){ last = {code:"free_limit"}; continue; }
+      if (res.status===404 || /not found|not supported for generateContent/i.test(msg)){ continue; }
+      last = {code:"upstream_error"};
+    }
+    throw last;
+  }
+
   async function askApi(file, text, signal){
     const key = keyStore.get();
     if (!key) throw {code:"no_key"};
+    if (key.startsWith("AIza")) return askGemini(key, await shrink(file), text, signal);
     const data = await shrink(file);
     let res;
     try {
@@ -484,7 +521,9 @@ Hvis billedet ikke viser et rum eller noget der roder, så giv "opgaver": [] og 
         refused: "Robotten kan ikke hjælpe med det billede. Prøv et andet.",
         images_unavailable: "Billeder kan ikke sendes i denne visning.",
         no_key: "Robotten mangler sin nøgle. Indsæt den i feltet og tryk Gem.",
-        bad_key: "Nøglen virker ikke. Tryk Skift nøgle og indsæt en ny fra console.anthropic.com.",
+        bad_key: "Nøglen virker ikke. Tryk Skift nøgle og indsæt en ny fra aistudio.google.com/apikey.",
+        free_limit: "Den gratis grænse er nået lige nu. Vent et minut og prøv igen. Er den brugt op for i dag, nulstilles den i morgen.",
+        region: "Google tilbyder ikke den gratis nøgle i dit land. Skriv til mig, så finder vi en anden løsning.",
         no_credit: "Der er ingen kredit på din Anthropic-konto. Køb kredit på console.anthropic.com under Billing."
       };
       const m = map[e?.code] ?? "Noget gik galt med forbindelsen. Prøv igen.";
