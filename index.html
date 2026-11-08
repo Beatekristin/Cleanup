@@ -170,6 +170,12 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 
 .note{font-size:14px;color:var(--muted)}
 .keybox{background:var(--surface);border:2.5px solid var(--edge);border-radius:20px;padding:16px;box-shadow:4px 4px 0 var(--edge)}
+details.keybox summary{cursor:pointer;font-weight:700;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:8px}
+details.keybox summary::-webkit-details-marker{display:none}
+details.keybox summary span{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+details.keybox summary::after{content:"+";font-size:22px;line-height:1}
+details.keybox[open] summary::after{content:"−"}
+details.keybox[open] summary{margin-bottom:12px}
 .keyform{display:flex;flex-direction:column;gap:10px}
 .keyform a{color:var(--primary);font-weight:700}
 .keyrow{display:flex;gap:8px;flex-wrap:wrap}
@@ -239,20 +245,20 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
     <input type="file" id="camInput" accept="image/*" capture="environment">
     <input type="file" id="fileInput" accept="image/*">
     <p class="note" id="aiNote"></p>
-    <div class="keybox" id="keyBox" hidden>
+    <details class="keybox" id="keyBox" hidden>
+      <summary>Gør robotten klogere <span>valgfrit</span></summary>
       <div id="keyForm" class="keyform">
-        <label class="label" for="apiKey">Robottens nøgle</label>
-        <p class="note">Robotten skal have en gratis nøgle fra Google for at kunne se billeder. Lav den på <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>, kopier den og sæt den ind her. Den gemmes kun på denne enhed.</p>
+        <p class="note">Robotten virker uden nøgle. Med en gratis nøgle fra Google kan den se flere slags ting og give mere præcise opgaver. Lav den på <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> og sæt den ind her. Den gemmes kun på denne enhed.</p>
         <div class="keyrow">
           <input type="password" id="apiKey" placeholder="AIza..." autocomplete="off" spellcheck="false">
           <button class="btn btn-primary" id="saveKey">Gem</button>
         </div>
       </div>
       <div id="keyOk" class="keyok" hidden>
-        <span><b>● Robotten er klar</b> til at se dine billeder.</span>
-        <button class="ghost" id="changeKey">Skift nøgle</button>
+        <span><b>● Klog robot er slået til</b> med din nøgle.</span>
+        <button class="ghost" id="changeKey">Fjern nøgle</button>
       </div>
-    </div>
+    </details>
     <div class="example" id="exampleWrap">
       <div><span class="example-tag">Eksempel</span></div>
       <p class="note">Sådan ser en plan ud for en stue med kaffekop, tallerken og legetøj på gulvet.</p>
@@ -345,7 +351,7 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
   function showKey(){
     const has = !!keyStore.get();
     $("keyForm").hidden = has; $("keyOk").hidden = !has;
-    $("aiNote").textContent = has ? "" : "Du kan også prøve eksemplet uden nøgle.";
+    $("aiNote").textContent = "Robotten kører gratis på din telefon, og billedet bliver på telefonen. Første gang henter den sin hjerne, ca. 130 MB. Brug gerne wifi.";
   }
   $("saveKey").onclick = () => {
     const v = $("apiKey").value.trim();
@@ -466,10 +472,163 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
   // AI availability
   (async () => {
     try { sample = await window.claude?.use?.("sample"); } catch(e){ sample = null; }
-    if (!sample){ mode = "api"; $("keyBox").hidden = false; showKey(); return; }
+    if (!sample){ mode = "local"; $("keyBox").hidden = false; showKey(); return; }
     try { const lim = await sample.limits(); canImages = !!lim.images; } catch(e){ canImages = false; }
     $("aiNote").textContent = canImages ? "Første gang spørger Claude, om robotten må se dit billede." : "Billeder kan ikke sendes i denne visning. Prøv eksemplet i stedet.";
   })();
+
+  // ---------- Robot on the phone: free, no key, photo never leaves the device ----------
+  const TJS = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.1/dist/transformers.web.min.js";
+  let brain = null;
+  function loadBrain(onProgress){
+    if (!brain){
+      brain = (async () => {
+        const { pipeline, env } = await import(TJS);
+        env.allowLocalModels = false;
+        const files = {};
+        const cb = p => {
+          if (p.status === "progress" && p.total){ files[p.file + p.name] = [p.loaded, p.total]; }
+          const v = Object.values(files); if (!v.length) return;
+          const l = v.reduce((s,x)=>s+x[0],0), t = v.reduce((s,x)=>s+x[1],0);
+          onProgress && onProgress(Math.min(99, Math.round(l/t*100)));
+        };
+        const [det, clip] = await Promise.all([
+          pipeline("object-detection", "Xenova/detr-resnet-50", { dtype:"q8", progress_callback: cb }),
+          pipeline("zero-shot-image-classification", "Xenova/clip-vit-base-patch32", { dtype:"q8", progress_callback: cb })
+        ]);
+        return { det, clip };
+      })().catch(e => { brain = null; throw e; });
+    }
+    return brain;
+  }
+  let brainProgress = null;
+  function warmBrain(){ if (mode === "local") loadBrain(p => brainProgress && brainProgress(p)).catch(()=>{}); }
+
+  // what the COCO detector finds -> group
+  const COCO = {
+    "cup":"dish","wine glass":"dish","bowl":"dish","fork":"cutlery","knife":"cutlery","spoon":"cutlery",
+    "bottle":"bottle","book":"book","remote":"remote","cell phone":"phone","laptop":"laptop","keyboard":"laptop","mouse":"laptop",
+    "teddy bear":"toy","sports ball":"toy","kite":"toy","frisbee":"toy","skateboard":"toy","baseball glove":"toy","baseball bat":"toy","tennis racket":"toy",
+    "backpack":"bag","handbag":"bag","suitcase":"bag",
+    "scissors":"scissors","toothbrush":"toothbrush","hair drier":"hairdryer","umbrella":"umbrella","tie":"clothes",
+    "banana":"food","apple":"food","orange":"food","sandwich":"food","pizza":"food","donut":"food","cake":"food","hot dog":"food","broccoli":"food","carrot":"food"
+  };
+  // what CLIP looks for in each part of the photo
+  const SCENES = [
+    ["clothes","a photo of clothes lying on the floor, a bed or a chair"],
+    ["shoes","a photo of shoes on the floor"],
+    ["toy","a photo of toys scattered on the floor"],
+    ["papers","a photo of papers, letters and mail on a table"],
+    ["trash","a photo of trash, wrappers and empty packaging"],
+    ["bed","a photo of an unmade bed with messy sheets and duvet"],
+    ["blanket","a photo of a crumpled blanket and pillows on a sofa"],
+    ["cables","a photo of tangled cables and chargers"],
+    ["dish","a photo of dirty dishes and cups"],
+    ["clean","a photo of a clean and tidy room"],
+    ["clean","a photo of an empty floor"],
+    ["clean","a photo of furniture"],
+    ["clean","a photo of a wall or a window"]
+  ];
+  // tasks: [title, detail, where, minutes per item, max minutes, singular, plural]
+  const T = {
+    dish:      ["Bær {n} ud i køkkenet","Tag {n} med ud i køkkenet, skyl dem af og sæt dem i opvaskemaskinen.","Køkken",1,4,"koppen","kopper og skåle"],
+    cutlery:   ["Saml bestikket","Tag gafler, knive og skeer med ud og læg dem i bestikkurven i opvaskemaskinen.","Køkken",1,1],
+    bottle:    ["Ryd flaskerne væk","Tomme flasker med pant i pantposen, resten i skraldespanden.","Køkken",1,2],
+    food:      ["Ryd maden væk","Det, der kan spises, i køleskabet. Rester og skræller i skraldespanden.","Køkken",1,3],
+    trash:     ["Saml skrald og emballage","Tag en pose og saml papir, plastik og tomme pakker. Sortér det i skraldespanden.","Skraldespand",2,4],
+    clothes:   ["Saml tøjet","Beskidt tøj i vasketøjskurven. Rent tøj foldes og lægges i skabet.","Vasketøjskurv",2,6],
+    shoes:     ["Stil skoene på plads","Sæt skoene parvis i skoreolen i entréen.","Entré",1,2],
+    toy:       ["Saml legetøjet","Læg alt legetøjet i legetøjskassen eller på hylden.","Legetøjskasse",2,6],
+    book:      ["Sæt bøgerne på reolen","Saml bøger og blade og stil dem på reolen.","Reol",1,2],
+    papers:    ["Ryd papirerne","Læg vigtige papirer i en bunke på skrivebordet og smid reklamer i papirspanden.","Skrivebord",2,4],
+    remote:    ["Læg fjernbetjeningen på plads","Læg fjernbetjeningen ved fjernsynet.","Stue",1,1],
+    phone:     ["Sæt telefonen til opladning","Sæt telefonen i opladeren, så den ikke ligger og flyder.","Oplader",1,1],
+    laptop:    ["Læg computeren på plads","Luk computeren og læg den på skrivebordet eller i tasken.","Skrivebord",1,1],
+    cables:    ["Rul ledningerne sammen","Rul opladere og ledninger sammen og læg dem i en skuffe.","Skuffe",1,2],
+    bag:       ["Hæng tasken op","Tøm tasken for skrald og hæng den på krogen.","Entré",1,2],
+    scissors:  ["Læg saksen i skuffen","Læg saksen tilbage i skuffen.","Skuffe",1,1],
+    toothbrush:["Sæt tandbørsten på plads","Sæt tandbørsten tilbage i kruset på badeværelset.","Badeværelse",1,1],
+    hairdryer: ["Læg hårtørreren væk","Rul ledningen sammen og læg hårtørreren i skabet.","Badeværelse",1,1],
+    umbrella:  ["Stil paraplyen på plads","Lad paraplyen tørre og stil den i entréen.","Entré",1,1],
+    blanket:   ["Fold tæppet og ret puderne","Fold tæppet og læg det over armlænet. Ret puderne i sofaen.","Sofa",2,2],
+    bed:       ["Red sengen","Ryst dynen, læg den pænt og ret puden.","Seng",2,2]
+  };
+  const NAMES = { dish:["kop eller skål","kopper og skåle"], bottle:["flaske","flasker"], book:["bog","bøger"], toy:["stykke legetøj","legetøj"], bag:["taske","tasker"], food:["madvare","madvarer"] };
+  const ORDER = ["dish","cutlery","food","bottle","trash","remote","phone","scissors","toothbrush","hairdryer","umbrella","laptop","cables","book","papers","bag","shoes","toy","clothes","blanket","bed"];
+
+  function crops(img){
+    const out = [], W = img.naturalWidth, H = img.naturalHeight;
+    const cols = W >= H ? 3 : 2, rows = W >= H ? 2 : 3;
+    const cw = W/cols, ch = H/rows;
+    for (let r=0;r<rows;r++) for (let c=0;c<cols;c++){
+      const cv = document.createElement("canvas"); cv.width = 336; cv.height = Math.round(336*ch/cw);
+      cv.getContext("2d").drawImage(img, c*cw, r*ch, cw, ch, 0, 0, cv.width, cv.height);
+      out.push(cv.toDataURL("image/jpeg", .85));
+    }
+    return out;
+  }
+  function loadImg(file){
+    return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej({code:"image_rejected"}); i.src = URL.createObjectURL(file); });
+  }
+  function smallUrl(img, max){
+    const k = Math.min(1, max/Math.max(img.naturalWidth, img.naturalHeight));
+    const cv = document.createElement("canvas"); cv.width = Math.round(img.naturalWidth*k); cv.height = Math.round(img.naturalHeight*k);
+    cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+    return cv.toDataURL("image/jpeg", .88);
+  }
+
+  async function askLocal(file, signal, onStage){
+    onStage && onStage("Henter robottens hjerne");
+    brainProgress = p => onStage && onStage(`Henter robottens hjerne ${p} %`);
+    let b;
+    try { b = await loadBrain(brainProgress); } catch(e){ throw {code:"brain_failed"}; }
+    if (signal.aborted) throw {code:"cancelled"};
+    const img = await loadImg(file);
+    onStage && onStage("Leder efter ting");
+    const found = {};
+    const add = (k, n) => { found[k] = (found[k]||0) + n; };
+    const dets = await b.det(smallUrl(img, 800), { threshold: 0.55 });
+    for (const d of dets){ const g = COCO[d.label]; if (g) add(g, 1); }
+    if (signal.aborted) throw {code:"cancelled"};
+    onStage && onStage("Kigger i hvert hjørne");
+    const labels = SCENES.map(s => s[1]);
+    const parts = [smallUrl(img, 448), ...crops(img)];
+    const res = await b.clip(parts, labels);
+    const all = Array.isArray(res[0]) ? res : [res];
+    const tiles = {};
+    all.forEach((scores, idx) => {
+      const per = {};
+      for (const s of scores){ const k = SCENES[labels.indexOf(s.label)][0]; per[k] = (per[k]||0) + s.score; }
+      const top = Object.entries(per).sort((a,b)=>b[1]-a[1])[0];
+      if (top && top[0] !== "clean" && top[1] > (idx===0 ? .28 : .34)) tiles[top[0]] = (tiles[top[0]]||0) + 1;
+    });
+    for (const [k, n] of Object.entries(tiles)){ if (!found[k]) add(k, n); }
+    if (room === "Soveværelse" && tiles.bed) found.bed = 1;
+    if (room === "Køkken"){ delete found.bed; delete found.blanket; }
+    if (signal.aborted) throw {code:"cancelled"};
+
+    const opgaver = [];
+    for (const k of ORDER){
+      const n = found[k]; if (!n || !T[k]) continue;
+      const [titel, detalje, hvor, per, max] = T[k];
+      let what = n > 1 ? `de ${n} kopper og skåle` : "koppen eller skålen";
+      opgaver.push({ titel: titel.replace("{n}", n > 1 ? `${n} kopper og skåle` : "koppen"), detalje: detalje.replace("{n}", what), hvor, minutter: Math.max(1, Math.min(max, Math.round(per * Math.max(1, n/2)))) });
+    }
+    const hasTable = found.dish || found.food || found.cutlery || found.bottle || found.papers;
+    const hasFloor = found.toy || found.clothes || found.trash || found.shoes;
+    if (opgaver.length && hasTable) opgaver.push({ titel:"Tør bordet af", detalje:"Tag en fugtig klud og tør krummer og ringe af bordet.", hvor:"Bord", minutter:2 });
+    if (opgaver.length && hasFloor) opgaver.push({ titel:"Støvsug eller fej gulvet", detalje:"Nu hvor gulvet er frit, så tag en hurtig tur med støvsugeren.", hvor:"Gulv", minutter:5 });
+
+    const seen = Object.keys(found).filter(k => NAMES[k] || T[k]).slice(0,4).map(k => {
+      const n = found[k], nm = NAMES[k];
+      return nm ? (n > 1 ? `${n} ${nm[1]}` : `${nm[0]}`) : T[k][0].toLowerCase();
+    });
+    return {
+      overblik: opgaver.length ? `Jeg fandt ${opgaver.length} ting at gøre.` : "Jeg kunne ikke finde noget, der roder. Prøv at tage billedet lidt tættere på.",
+      opmuntring: opgaver.length ? "Vi tager én ting ad gangen!" : "",
+      opgaver: opgaver.slice(0, 12)
+    };
+  }
 
   function prompt(extra){
     return `Du er Oprydningsrobotten, en venlig og konkret hjælper på dansk. Billedet er taget i rummet: ${room}.
@@ -489,8 +648,7 @@ Hvis billedet ikke viser et rum eller noget der roder, så giv "opgaver": [] og 
   async function analyze(file, extra){
     err("");
     if (!file) return;
-    if (mode === "api" && !keyStore.get()){ err("Robotten mangler sin nøgle. Indsæt den i feltet og tryk Gem."); $("keyBox").scrollIntoView({behavior:"smooth"}); return; }
-    if (mode !== "api" && (!sample || !canImages)){ err("Billeder kan ikke sendes i denne visning. Prøv eksemplet i stedet."); return; }
+    if (mode === "claude" && (!sample || !canImages)){ err("Billeder kan ikke sendes i denne visning. Prøv eksemplet i stedet."); return; }
     $("photoImg").src = URL.createObjectURL(file);
     show("viewScan"); bot("think");
     const words = ["Scanner rummet","Leder efter tallerkener","Tæller legetøj","Finder vasketøj","Tjekker bordet","Laver din plan"];
@@ -499,8 +657,8 @@ Hvis billedet ikke viser et rum eller noget der roder, så giv "opgaver": [] og 
     say("Jeg kigger…", "Jeg finder de ting, der skal på plads, og laver en plan.");
     ctl = new AbortController();
     try {
-      const data = mode === "api"
-        ? await askApi(file, prompt(extra), ctl.signal)
+      const data = mode === "local"
+        ? (keyStore.get() ? await askApi(file, prompt(extra), ctl.signal) : await askLocal(file, ctl.signal, st => { clearInterval(wt); $("scanWord").textContent = st; }))
         : await sample.json(prompt(extra), { images: file, signal: ctl.signal, cache: false });
       const opg = Array.isArray(data?.opgaver) ? data.opgaver.filter(o => o && o.titel).slice(0,12) : [];
       if (!opg.length){
@@ -522,6 +680,7 @@ Hvis billedet ikke viser et rum eller noget der roder, så giv "opgaver": [] og 
         images_unavailable: "Billeder kan ikke sendes i denne visning.",
         no_key: "Robotten mangler sin nøgle. Indsæt den i feltet og tryk Gem.",
         bad_key: "Nøglen virker ikke. Tryk Skift nøgle og indsæt en ny fra aistudio.google.com/apikey.",
+        brain_failed: "Robotten kunne ikke hente sin hjerne. Tjek at du er på nettet, og prøv igen.",
         free_limit: "Den gratis grænse er nået lige nu. Vent et minut og prøv igen. Er den brugt op for i dag, nulstilles den i morgen.",
         region: "Google tilbyder ikke den gratis nøgle i dit land. Skriv til mig, så finder vi en anden løsning.",
         no_credit: "Der er ingen kredit på din Anthropic-konto. Køb kredit på console.anthropic.com under Billing."
@@ -631,6 +790,7 @@ Hvis billedet ikke viser et rum eller noget der roder, så giv "opgaver": [] og 
     const did = plan ? plan.opgaver.filter(o=>o.status==="done").map(o=>o.titel).join("; ") : "";
     plan=null; analyze(f, did ? `Brugeren har lige klaret disse opgaver: ${did}. Tæl kun det, der stadig roder. Hvis næsten alt er fint, så ros dem i "overblik".` : "");
   };
+  ["camInput","fileInput"].forEach(id => $(id).addEventListener("click", warmBrain));
   $("stopBtn").onclick = () => ctl?.abort();
   $("resetBtn").onclick = reset;
   $("newBtn").onclick = reset;
